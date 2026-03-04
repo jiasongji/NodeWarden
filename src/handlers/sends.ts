@@ -1195,9 +1195,17 @@ export async function handleDownloadSendFile(
     return errorResponse('Token mismatch', 401);
   }
 
+  const storage = new StorageService(env.DB);
   const object = await env.ATTACHMENTS.get(getSendFilePath(sendId, fileId));
   if (!object) {
     return errorResponse('Send file not found', 404);
+  }
+
+  // Reuse the existing one-time token store used by attachment downloads.
+  // Prefix avoids accidental cross-domain JTI collisions.
+  const firstUse = await storage.consumeAttachmentDownloadToken(`send:${claims.jti}`, claims.exp);
+  if (!firstUse) {
+    return errorResponse('Invalid or expired token', 401);
   }
 
   return new Response(object.body, {
@@ -1287,4 +1295,3 @@ export async function issueSendAccessToken(
   const token = await createSendAccessToken(send.id, jwt.secret);
   return { token };
 }
-
